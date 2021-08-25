@@ -25,12 +25,13 @@ def main():
     parser = argparse.ArgumentParser(
         description="Extract images and labels from a ROS bag"
     )
-    parser.add_argument("bag_file", help="ros bag file")
+    parser.add_argument("bag_file", required=True, help="ros bag file")
     parser.add_argument("output_dir", help="directory to save images and labels")
-    parser.add_argument("image_topic", default="/usb_cam/image_raw", help="image topic")
-    parser.add_argument("label_topic", default="/cmd_vel", help="label topic")
 
     args = parser.parse_args()
+
+    image_topic = "/usb_cam/image_raw"
+    label_topic = "/cmd_vel"
 
     bag = rosbag.Bag(args.bag_file, "r")
     bridge = CvBridge()
@@ -47,7 +48,7 @@ def main():
     n_images = 0
     n_labels = 0
     copied = 0
-    for topic, msg, t in bag.read_messages(topics=[args.image_topic, args.label_topic]):
+    for topic, msg, t in bag.read_messages(topics=[image_topic, label_topic]):
         if topic == args.image_topic:
             n_images += 1
 
