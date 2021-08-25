@@ -1,36 +1,49 @@
 FROM osrf/ros:melodic-desktop-full
 
+RUN echo "source /opt/ros/melodic/setup.bash" >> ~/.bashrc
+
 RUN apt-get update && apt-get install -y \
-      ros-${ROS_DISTRO}-cv-bridge \
-      ros-${ROS_DISTRO}-vision-opencv \
       python3-pip python3-yaml \
-      python-catkin-tools python3-dev \
-      python3-numpy git && \
+      python-catkin-tools python3-dev python3-numpy \ 
+      python3-opencv \
+      git && \
     rm -rf /var/lib/apt/lists/*
+# CVBridge build tools
 
-RUN pip3 install rospkg catkin-pkg jupyterlab
+RUN pip3 install \
+    rospkg catkin_pkg \
+    pycryptodomex python-gnupg
 
-RUN catkin config \
-      -DPYTHON_EXECUTABLE=/usr/bin/python3 \
-      -DPYTHON_INCLUDE_DIR=/usr/include/python3.6m \
-      -DPYTHON_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.6m.so && \
-    catkin config --install
+ # fixes rosbag import error
 
-RUN mkdir -p /src
+RUN mkdir -p /home/ros_ws/src 
+WORKDIR /home/ros_ws
 
-WORKDIR /src
+RUN /bin/bash -c '. /opt/ros/melodic/setup.bash; catkin_make'
+
+RUN echo "source /home/ros_ws/devel/setup.bash" >> ~/.bashrc
+
+WORKDIR /home/catkin_build_ws
+
+RUN mkdir /home/catkin_build_ws/build \
+        && mkdir /home/catkin_build_ws/devel \
+        && mkdir /home/catkin_build_ws/install \
+        && mkdir /home/catkin_build_ws/logs \
+        && mkdir /home/catkin_build_ws/src \
+    && catkin config \
+        -DPYTHON_EXECUTABLE=/usr/bin/python3 \
+        -DPYTHON_INCLUDE_DIR=/usr/include/python3.6m \
+        -DPYTHON_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.6m.so \
+    && catkin config --install
+
+WORKDIR /home/catkin_build_ws/src
 
 RUN git clone -b melodic https://github.com/ros-perception/vision_opencv.git
 
-WORKDIR /
+WORKDIR /home/catkin_build_ws
 
-RUN catkin build cv_bridge && \
-    source install/setup.bash --extend
+RUN /bin/bash -c '. /opt/ros/melodic/setup.bash; catkin build cv_bridge'
 
-WORKDIR /src
+RUN echo "source /home/catkin_build_ws/install/setup.bash --extend" >> ~/.bashrc
 
-RUN git clone https://github.com/ros/ros 
-
-WORKDIR /
-
-RUN catkin_make_isolated --install --pkg rosunit -DCMAKE_BUILD_TYPE=Release --install-space /opt/ros/melodic
+WORKDIR /home/ros_ws
