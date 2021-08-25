@@ -6,6 +6,7 @@
 import os
 
 import argparse
+import csv
 
 import cv2
 
@@ -21,57 +22,73 @@ def get_label(msg):
 
 
 def main():
-    """Extract a folder of images and csv label file from a rosbag."""
     parser = argparse.ArgumentParser(
-        description="Extract images and labels from a ROS bag."
+        description="Extract images and labels from a ROS bag"
     )
-    parser.add_argument("bag_file", help="Input ROS bag.")
-    parser.add_argument("output_dir", help="Output directory.")
-    parser.add_argument("image_topic", help="Image topic.")
-    parser.add_argument("label_topic", nargs="+", help="Image topic.")
+    parser.add_argument("bag_file", help="ros bag file")
+    parser.add_argument("output_dir", help="directory to save images and labels")
+    parser.add_argument("image_topic", default="/usb_cam/image_raw", help="image topic")
+    parser.add_argument("label_topic", default="/cmd_vel", help="label topic")
 
     args = parser.parse_args()
-
-    print(
-        "Extract images from %s on topic %s into %s"
-        % (args.bag_file, args.image_topic, args.output_dir)
-    )
 
     bag = rosbag.Bag(args.bag_file, "r")
     bridge = CvBridge()
 
-    parsed_images = {"path": [], "t": []}
+    os.mkdir(os.path.join(args.output_dir, "images"))
 
-    i = 0
-    for topic, msg, t in bag.read_messages(
-        topics=[args.image_topic, *args.label_topic]
-    ):
-        cv_img = bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
+    # map labels to images
+    #
+    # labels and images aren't synchronized
+    # map the latest label to an image
+    # if no labels are present between images, use the previous label
+    path_list = []
+    label_list = []
+    n_images = 0
+    n_labels = 0
+    copied = 0
+    for topic, msg, t in bag.read_messages(topics=[args.image_topic, args.label_topic]):
+        if topic == args.image_topic:
+            n_images += 1
 
-        path = os.path.join(args.output_dir, f"{i}.png")
-        cv2.imwrite(path, cv_img)
+            cv_img = bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
 
-        parsed_images["path"].append(path)
-        parsed_images["t"].append(t.to_time())
+            path = os.path.join(args.output_dir, "images", f"{n_images}.png")
+            cv2.imwrite(path, cv_img)
 
-        i += 1
+            path_list.append(path)
 
-    base_dict = {"label": [], "t": []}
-    parsed_labels = {k: base_dict.copy() for k in args.label_topic}
-    i = 0
-    for topic, msg, t in bag.read_messages(topics=args.label_topic):
-        current_dict = parsed_labels[topic]
+            if len(label_list) - n_images > 1:
+                label_list.append(label_list[-1])
+                copied += 1
 
-        label = get_label(msg)
+        else:
+            n_labels += 1
 
-        print(f"labeled image {i}")
+            label = get_label(msg)
 
-        i += 1
-
-        current_dict["label"].append(label)
-        current_dict["t"].append(t.to_time())
+            if n_images > len(label_list):
+                label_list.append(label)
+            elif n_images == len(label_list):
+                # overwrite only when there's useful labels
+                if label[1] != 0.0:
+                    label_list[n_images - 1] = label
 
     bag.close()
+
+    print(
+        f"{n_images} images written, {n_labels} labels recieved, {copied} labels copied over"
+    )
+
+    csv_path = os.path.join(args.output_dir, "label.csv")
+    with open(csv_path, "w", newline="") as csvfile:
+        csv_writer = csv.writer(
+            csvfile, delimiter=" ", quotechar="|", quoting=csv.QUOTE_MINIMAL
+        )
+
+        for path, label in zip(path_list, label_list):
+            vel, ang = label
+            csv_writer.writerow([path, vel, ang])
 
 
 if __name__ == "__main__":
