@@ -8,6 +8,10 @@ build the image
 
 ## testing
 
+### automatic
+running test.sh will run the steps below for you. run in the same directory as the script
+
+### manual
 change your working directory to docker-tests.
 
 build and run container to run the test scripts
