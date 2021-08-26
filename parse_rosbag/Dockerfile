@@ -46,4 +46,4 @@ RUN /bin/bash -c '. /opt/ros/melodic/setup.bash; catkin build cv_bridge'
 
 RUN echo "source /home/catkin_build_ws/install/setup.bash --extend" >> ~/.bashrc
 
-WORKDIR /home/ros_ws
+WORKDIR /home/ros_ws/src
