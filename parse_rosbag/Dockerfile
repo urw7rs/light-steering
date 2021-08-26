@@ -16,13 +16,6 @@ RUN pip3 install \
 
  # fixes rosbag import error
 
-RUN mkdir -p /home/ros_ws/src 
-WORKDIR /home/ros_ws
-
-RUN /bin/bash -c '. /opt/ros/melodic/setup.bash; catkin_make'
-
-RUN echo "source /home/ros_ws/devel/setup.bash" >> ~/.bashrc
-
 WORKDIR /home/catkin_build_ws
 
 RUN mkdir /home/catkin_build_ws/build \
@@ -46,4 +39,4 @@ RUN /bin/bash -c '. /opt/ros/melodic/setup.bash; catkin build cv_bridge'
 
 RUN echo "source /home/catkin_build_ws/install/setup.bash --extend" >> ~/.bashrc
 
-WORKDIR /home/ros_ws/src
+COPY src /home/src
