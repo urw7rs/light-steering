@@ -1,5 +1,7 @@
 import unittest
 
+import parse_bag.create_dataset
+
 
 class TestSum(unittest.TestCase):
     def test_sum(self):
