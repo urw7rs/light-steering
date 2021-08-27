@@ -12,6 +12,8 @@ bind mount bag file directory to /home/bag_files, output directory to /home/outp
 
 run `rosrun parse dataset_from_rosbag.py bag_files output`
 
+or run `./parse.sh`
+
 ## testing
 
 ### automatic
