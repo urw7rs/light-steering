@@ -6,7 +6,9 @@
 import os
 
 import argparse
-import csv
+
+import numpy as np
+import pandas as pd
 
 import cv2
 
@@ -22,7 +24,9 @@ def get_label(msg):
 
 
 def parse_bag(bag, output_path):
-    os.mkdir(os.path.join(output_path, "image"))
+    img_path = os.path.join(output_path, "image")
+    if not os.path.isdir(img_path):
+        os.mkdir(img_path)
 
     bridge = CvBridge()
 
@@ -42,12 +46,16 @@ def parse_bag(bag, output_path):
 
             cv_img = bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
 
-            path = os.path.join(output_path, "image", f"{n_image}.png")
-            cv2.imwrite(path, cv_img)
+            path = os.path.join("image", f"{n_image}.png")
+            save_path = os.path.join(output_path, path)
+            if os.path.isfile(save_path):
+                print(f"skipping {save_path} already written")
+            else:
+                cv2.imwrite(save_path, cv_img)
 
             path_list.append(path)
 
-            if len(label_list) - n_image > 1:
+            if n_image - len(label_list) > 1:
                 label_list.append(label_list[-1])
                 copied += 1
 
@@ -63,17 +71,21 @@ def parse_bag(bag, output_path):
                 if label[1] != 0.0:
                     label_list[n_image - 1] = label
 
+    if n_image > len(label_list):
+        label_list.append(label_list[-1])
+        copied += 1
+
+    label = np.array(label_list)
+    path = np.array(path_list).reshape(-1, 1)
+
+    data = np.concatenate((path, label), axis=1)
+
+    df = pd.DataFrame(data, columns=["path", "vel", "ang"])
+
     csv_path = os.path.join(output_path, "label.csv")
-    with open(csv_path, "w", newline="") as csvfile:
-        csv_writer = csv.writer(
-            csvfile, delimiter=" ", quotechar="|", quoting=csv.QUOTE_MINIMAL
-        )
+    df.to_csv(csv_path)
 
-        for path, label in zip(path_list, label_list):
-            vel, ang = label
-            csv_writer.writerow([path, vel, ang])
-
-    return path_list, label_list
+    return n_image, copied
 
 
 image_topic = "/usb_cam/image_raw"
@@ -91,16 +103,18 @@ def main():
 
     for bag_path in os.listdir(args.bagdir_path):
         print(f"parsing {bag_path}")
+
         bag = rosbag.Bag(os.path.join(args.bagdir_path, bag_path), "r")
 
         output_path = os.path.join(args.output_path, bag_path[:-4])
-        os.mkdir(output_path)
+        if not os.path.isdir(output_path):
+            os.mkdir(output_path)
 
-        parse_bag(bag, output_path)
+        n_image, copied = parse_bag(bag, output_path)
 
         bag.close()
 
-        print(f"parsed {bag_path}")
+        print(f"parsed {bag_path}: {n_image} written, {copied} copied ")
 
 
 if __name__ == "__main__":

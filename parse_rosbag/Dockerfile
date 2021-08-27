@@ -41,7 +41,8 @@ RUN apt-get update && apt-get install -y python3-pip python3-yaml \
 
 RUN pip3 install \
     rospkg catkin_pkg \
-    pycryptodomex python-gnupg
+    pycryptodomex python-gnupg \
+    pandas
 
 WORKDIR /home/catkin_build_ws
 
@@ -73,6 +74,8 @@ RUN catkin_create_pkg parse rospy std_msgs
 COPY parse/src/* /home/ros_ws/src/parse/src/
 
 WORKDIR /home
+
+COPY parse.sh .
 
 # bind mount bag file directory to /home/bag_files, output directory to /home/output
 # run rosrun parse dataset_from_rosbag.py bag_files output
