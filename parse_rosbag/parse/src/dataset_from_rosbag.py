@@ -21,8 +21,10 @@ def get_label(msg):
     return vel, ang
 
 
-def parse_bag(bag, bridge, output_path):
+def parse_bag(bag, output_path):
     os.mkdir(os.path.join(output_path, "image"))
+
+    bridge = CvBridge()
 
     # map labels to images
     #
@@ -88,16 +90,17 @@ def main():
     args = parser.parse_args()
 
     for bag_path in os.listdir(args.bagdir_path):
+        print(f"parsing {bag_path}")
         bag = rosbag.Bag(os.path.join(args.bagdir_path, bag_path), "r")
-
-        bridge = CvBridge()
 
         output_path = os.path.join(args.output_path, bag_path[:-4])
         os.mkdir(output_path)
 
-        parse_bag(bag, bridge, output_path)
+        parse_bag(bag, output_path)
 
         bag.close()
+
+        print(f"parsed {bag_path}")
 
 
 if __name__ == "__main__":
