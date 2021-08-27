@@ -4,7 +4,13 @@
 
 build the image
 
+needs ros_ws but not included in the repository (too big)
+
 `docker build -t parsebag .`
+
+bind mount bag file directory to /home/bag_files, output directory to /home/output
+
+run `rosrun parse dataset_from_rosbag.py bag_files output`
 
 ## testing
 
