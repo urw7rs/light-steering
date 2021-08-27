@@ -2,6 +2,6 @@
 
 cd ..
 docker build -t parsebag .
-cd docker-tests
+cd docker-test
 docker build -t parsebag:test .
 docker run --rm parsebag:test

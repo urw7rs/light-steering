@@ -21,22 +21,8 @@ def get_label(msg):
     return vel, ang
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Extract images and labels from a ROS bag"
-    )
-    parser.add_argument("bag_file", required=True, help="ros bag file")
-    parser.add_argument("output_dir", help="directory to save images and labels")
-
-    args = parser.parse_args()
-
-    image_topic = "/usb_cam/image_raw"
-    label_topic = "/cmd_vel"
-
-    bag = rosbag.Bag(args.bag_file, "r")
-    bridge = CvBridge()
-
-    os.mkdir(os.path.join(args.output_dir, "images"))
+def parse_bag(bag, bridge, output_path):
+    os.mkdir(os.path.join(output_path, "image"))
 
     # map labels to images
     #
@@ -45,21 +31,21 @@ def main():
     # if no labels are present between images, use the previous label
     path_list = []
     label_list = []
-    n_images = 0
+    n_image = 0
     n_labels = 0
     copied = 0
     for topic, msg, t in bag.read_messages(topics=[image_topic, label_topic]):
-        if topic == args.image_topic:
-            n_images += 1
+        if topic == image_topic:
+            n_image += 1
 
             cv_img = bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
 
-            path = os.path.join(args.output_dir, "images", f"{n_images}.png")
+            path = os.path.join(output_path, "image", f"{n_image}.png")
             cv2.imwrite(path, cv_img)
 
             path_list.append(path)
 
-            if len(label_list) - n_images > 1:
+            if len(label_list) - n_image > 1:
                 label_list.append(label_list[-1])
                 copied += 1
 
@@ -68,20 +54,14 @@ def main():
 
             label = get_label(msg)
 
-            if n_images > len(label_list):
+            if n_image > len(label_list):
                 label_list.append(label)
-            elif n_images == len(label_list):
+            elif n_image == len(label_list):
                 # overwrite only when there's useful labels
                 if label[1] != 0.0:
-                    label_list[n_images - 1] = label
+                    label_list[n_image - 1] = label
 
-    bag.close()
-
-    print(
-        f"{n_images} images written, {n_labels} labels recieved, {copied} labels copied over"
-    )
-
-    csv_path = os.path.join(args.output_dir, "label.csv")
+    csv_path = os.path.join(output_path, "label.csv")
     with open(csv_path, "w", newline="") as csvfile:
         csv_writer = csv.writer(
             csvfile, delimiter=" ", quotechar="|", quoting=csv.QUOTE_MINIMAL
@@ -90,6 +70,34 @@ def main():
         for path, label in zip(path_list, label_list):
             vel, ang = label
             csv_writer.writerow([path, vel, ang])
+
+    return path_list, label_list
+
+
+image_topic = "/usb_cam/image_raw"
+label_topic = "/cmd_vel"
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Extract images and labels from a ROS bag"
+    )
+    parser.add_argument("bagdir_path", help="ros bag file")
+    parser.add_argument("output_path", help="directory to save images and labels")
+
+    args = parser.parse_args()
+
+    for bag_path in os.listdir(args.bagdir_path):
+        bag = rosbag.Bag(os.path.join(args.bagdir_path, bag_path), "r")
+
+        bridge = CvBridge()
+
+        output_path = os.path.join(args.output_path, bag_path[:-4])
+        os.mkdir(output_path)
+
+        parse_bag(bag, bridge, output_path)
+
+        bag.close()
 
 
 if __name__ == "__main__":
