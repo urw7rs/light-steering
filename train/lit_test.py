@@ -4,8 +4,17 @@ import pytorch_lightning as pl
 
 from lit_train import LitLightSteer, POCDataModule
 
-PATH = os.path.join("checkpoint", "pocmodel-epoch=04-val_loss=0.0712.ckpt")
+import argparse
 
+parser = argparse.ArgumentParser(description="test model.")
+parser.add_argument(
+    "checkpoint",
+    help="checkpoint path",
+)
+
+arg = parser.parse_args()
+
+PATH = arg.checkpoint
 ROOT = "/work/dataset"
 IMGSIZE = (64, 48)
 LR = 1e-3
@@ -17,8 +26,7 @@ dm = POCDataModule(
     img_size=IMGSIZE,
 )
 
-model = LitLightSteer(LR)
-model.load_from_checkpoint(checkpoint_path=PATH)
+model = LitLightSteer.load_from_checkpoint(checkpoint_path=PATH)
 
 trainer = pl.Trainer(gpus=1, precision=16)
 trainer.test(model, dm)

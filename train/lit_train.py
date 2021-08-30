@@ -15,6 +15,11 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 from PIL import Image
 
+# logger
+from pytorch_lightning.loggers import TensorBoardLogger
+
+import argparse
+
 BATCH_SIZE = 64
 ROOT = "/work/dataset"
 IMGSIZE = (64, 48)
@@ -259,28 +264,24 @@ class LitLightSteer(pl.LightningModule):
 
         self.learning_rate = learning_rate
 
-        p = 0.6
         self.model = nn.Sequential(
-            nn.Conv2d(3, 16, 4, 2),
-            nn.Dropout(p),
+            nn.Conv2d(3, 16, 3, 2),
             nn.ReLU(),
             nn.Conv2d(16, 32, 3, 2),
-            nn.Dropout(p),
             nn.ReLU(),
+            nn.Conv2d(32, 64, 3, 2),
             nn.Flatten(),
-            nn.LazyLinear(100),
-            nn.Dropout(p),
+            nn.LazyLinear(500),
             nn.ReLU(),
             nn.LazyLinear(100),
-            nn.Dropout(p),
             nn.ReLU(),
             nn.LazyLinear(2),
         )
 
     def forward(self, x):
         y = self.model(x)
-        y[:, 0] = 1.2 * F.sigmoid(y[:, 0])
-        y[:, 1] = 0.7 * F.tanh(y[:, 1])
+        y[:, 0] = 1.2 * torch.sigmoid(y[:, 0])
+        y[:, 1] = 0.7 * torch.tanh(y[:, 1])
         return y
 
     def training_step(self, batch, batch_idx):
@@ -295,7 +296,6 @@ class LitLightSteer(pl.LightningModule):
         y_hat = self.model(x)
         loss = F.mse_loss(y_hat, y)
         self.log("val_loss", loss, prog_bar=True)
-        self.log("learning_rate", self.learning_rate, prog_bar=True)
         return loss
 
     def test_step(self, batch, batch_idx):
@@ -306,7 +306,7 @@ class LitLightSteer(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
@@ -317,32 +317,42 @@ class LitLightSteer(pl.LightningModule):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="train model.")
+    parser.add_argument(
+        "checkpoint",
+        help="checkpoint path",
+    )
+
+    arg = parser.parse_args()
+
     dm = POCDataModule(
         data_dir=ROOT,
         img_size=IMGSIZE,
-        augmentation=[
-            transforms.ColorJitter(
-                brightness=0.8, contrast=0.5, saturation=0.5, hue=0.5
-            )
-        ],
+        augmentation=None  # [
+        # transforms.ColorJitter(
+        #    brightness=0.8, contrast=0.5, saturation=0.5, hue=0.5
+        # )
+        # ],
     )
     model = LitLightSteer(learning_rate=LR)
 
     checkpoint_callback = ModelCheckpoint(
         monitor="val_loss",
-        dirpath="checkpoint",
-        filename="pocmodel-{epoch:02d}-{val_loss:.4f}",
+        dirpath=arg.checkpoint,
+        filename="pocmodel-{epoch:02d}-{val_loss:.8f}",
         save_top_k=3,
         mode="min",
     )
     lr_monitor = LearningRateMonitor(logging_interval="step")
 
+    logger = TensorBoardLogger("tb_logs", name="nvidia-convnet")
     trainer = pl.Trainer(
         gpus=1,
         precision=16,
         callbacks=[checkpoint_callback, lr_monitor],
-        max_epochs=500,
-        default_root_dir="checkpoint",
+        max_epochs=1000,
+        default_root_dir=arg.checkpoint,
+        logger=logger,
     )
 
     trainer.fit(model, dm)
