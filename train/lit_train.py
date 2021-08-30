@@ -61,20 +61,26 @@ class CustomDataset(Dataset):
 
 
 class RamDataset(Dataset):
-    def __init__(self, dataset, transform=None, target_transform=None):
+    def __init__(self, dataset, f, transform=None, target_transform=None):
         self.transform = transform
         self.target_transform = target_transform
 
-        dataloader = DataLoader(dataset, batch_size=20480)
+        if not os.path.isfile(f):
+            dataloader = DataLoader(dataset, batch_size=2048)
 
-        data = []
-        label = []
-        for x, y in dataloader:
-            data.append(x)
-            label.append(y)
+            data = []
+            label = []
+            for x, y in dataloader:
+                print("hi")
+                data.append(x)
+                label.append(y)
 
-        self.data = torch.cat(data, dim=0)
-        self.label = torch.cat(label, dim=0)
+            data = torch.cat(data, dim=0)
+            label = torch.cat(label, dim=0)
+
+            torch.save((data, label), f)
+
+        self.data, self.label = torch.load(f)
 
     def __getitem__(self, idx):
         x = self.data[idx]
@@ -92,7 +98,7 @@ class RamDataset(Dataset):
 
 
 class POCDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir, img_size, augmentation=None, fill_memory=True):
+    def __init__(self, data_dir, img_size, augmentation=None, memory=True):
         super().__init__()
 
         self.data_dir = data_dir
@@ -102,47 +108,52 @@ class POCDataModule(pl.LightningDataModule):
 
         self.augmentation = augmentation
 
-        self.memory = fill_memory
+        self.memory = memory
 
         # self.dims = (3, *img_size)
 
     def prepare_data(self):
-        path_col = "path"
-        label_cols = ["vel", "ang"]
 
-        pairs = []
-        for clip_path in os.listdir(self.data_dir):
-            if not os.path.isdir(os.path.join(self.data_dir, clip_path)):
-                continue
-            elif clip_path[0] == ".":
-                continue
+        label_path = os.path.join(self.data_dir, "label.csv")
+        if not os.path.isfile(label_path):
+            path_col = "path"
+            label_cols = ["vel", "ang"]
 
-            df = pd.read_csv(
-                os.path.join(self.data_dir, clip_path, "label.csv"),
-                usecols=[path_col, *label_cols],
-            )
+            pairs = []
+            for clip_path in os.listdir(self.data_dir):
+                if not os.path.isdir(os.path.join(self.data_dir, clip_path)):
+                    continue
+                elif clip_path[0] == ".":
+                    continue
 
-            df[path_col] = df[path_col].apply(
-                lambda path: os.path.join(clip_path, path)
-            )
+                df = pd.read_csv(
+                    os.path.join(self.data_dir, clip_path, "label.csv"),
+                    usecols=[path_col, *label_cols],
+                )
 
-            pairs.append(df)
+                df[path_col] = df[path_col].apply(
+                    lambda path: os.path.join(clip_path, path)
+                )
 
-        # filter bad data
-        df = df[df.loc[:, "vel"] > 0]
+                pairs.append(df)
 
-        # split into train val test 0.96 0.02 0.02
-        train, test = train_test_split(df, test_size=0.2)
-        test, val = train_test_split(test, test_size=0.5)
+            df = pd.concat(pairs, axis=0)
 
-        # add split column and concat
-        splits = [train, val, test]
-        for i, split in enumerate(splits):
-            split.insert(len(split.columns), "split", [i] * len(split))
-        splits = pd.concat([train, val, test], axis=0)
+            # filter bad data
+            df = df[df.loc[:, "vel"] > 0]
 
-        # save combined labels to csv file
-        splits.to_csv(os.path.join(self.data_dir, "label.csv"))
+            # split into train val test 0.96 0.02 0.02
+            train, test = train_test_split(df, test_size=0.2)
+            test, val = train_test_split(test, test_size=0.5)
+
+            # add split column and concat
+            splits = [train, val, test]
+            for i, split in enumerate(splits):
+                split.insert(len(split.columns), "split", [i] * len(split))
+            splits = pd.concat([train, val, test], axis=0)
+
+            # save combined labels to csv file
+            splits.to_csv(os.path.join(self.data_dir, "label.csv"))
 
         # find mean and std for normalization
         norm_path = os.path.join(self.data_dir, "norm.csv")
@@ -183,14 +194,15 @@ class POCDataModule(pl.LightningDataModule):
             mean = df["mean"].tolist()
             std = df["std"].tolist()
 
-        if self.memory:
-            self.augmentation = transforms.Compose(
-                [*self.augmentation, transforms.Normalize(mean, std)]
-            )
+        if self.augmentation is None:
+            after_transforms = [transforms.Normalize(mean, std)]
         else:
-            self.transform.transforms.extend(
-                [*self.augmentation, transforms.Normalize(mean, std)]
-            )
+            after_transforms = [*self.augmentation, transforms.Normalize(mean, std)]
+
+        if self.memory:
+            self.augmentation = transforms.Compose(after_transforms)
+        else:
+            self.transform.transforms.extend(after_transforms)
 
     def setup(self, stage=None):
         # Assign train/val datasets for use in dataloaders
@@ -203,8 +215,12 @@ class POCDataModule(pl.LightningDataModule):
             )
 
             if self.memory:
-                self.train = RamDataset(self.train, transform=self.augmentation)
-                self.val = RamDataset(self.val, transform=self.augmentation)
+                self.train = RamDataset(
+                    dataset=self.train, f="train.pt", transform=self.augmentation
+                )
+                self.val = RamDataset(
+                    dataset=self.val, f="val.pt", transform=self.augmentation
+                )
 
         # Assign test dataset for use in dataloader(s)
         if stage == "test" or stage is None:
@@ -213,7 +229,9 @@ class POCDataModule(pl.LightningDataModule):
             )
 
             if self.memory:
-                self.test = RamDataset(self.test, transform=self.augmentation)
+                self.test = RamDataset(
+                    dataset=self.test, f="test.pt", transform=self.augmentation
+                )
 
     def get_dataloader(self, dataset, shuffle=False):
         return DataLoader(
@@ -225,7 +243,7 @@ class POCDataModule(pl.LightningDataModule):
         )
 
     def train_dataloader(self):
-        return self.get_dataloader(self.train, True)
+        return self.get_dataloader(self.train, shuffle=True)
 
     def val_dataloader(self):
         return self.get_dataloader(self.val)
@@ -237,18 +255,24 @@ class POCDataModule(pl.LightningDataModule):
 class LitLightSteer(pl.LightningModule):
     def __init__(self, learning_rate):
         super().__init__()
+        self.save_hyperparameters()
 
         self.learning_rate = learning_rate
 
+        p = 0.6
         self.model = nn.Sequential(
             nn.Conv2d(3, 16, 4, 2),
+            nn.Dropout(p),
             nn.ReLU(),
             nn.Conv2d(16, 32, 3, 2),
+            nn.Dropout(p),
             nn.ReLU(),
             nn.Flatten(),
             nn.LazyLinear(100),
+            nn.Dropout(p),
             nn.ReLU(),
             nn.LazyLinear(100),
+            nn.Dropout(p),
             nn.ReLU(),
             nn.LazyLinear(2),
         )
@@ -264,6 +288,7 @@ class LitLightSteer(pl.LightningModule):
         y_hat = self.model(x)
         loss = F.mse_loss(y_hat, y)
         self.log("train_loss", loss, prog_bar=True)
+        return loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
@@ -271,12 +296,14 @@ class LitLightSteer(pl.LightningModule):
         loss = F.mse_loss(y_hat, y)
         self.log("val_loss", loss, prog_bar=True)
         self.log("learning_rate", self.learning_rate, prog_bar=True)
+        return loss
 
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self.model(x)
         loss = F.mse_loss(y_hat, y)
         self.log("test_loss", loss, prog_bar=True)
+        return loss
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
@@ -289,20 +316,33 @@ class LitLightSteer(pl.LightningModule):
         }
 
 
-dm = POCDataModule(
-    data_dir=ROOT,
-    img_size=IMGSIZE,
-    augmentation=[
-        transforms.ColorJitter(brightness=0.8, contrast=0.5, saturation=0.5, hue=0.5)
-    ],
-)
-model = LitLightSteer(learning_rate=LR)
+if __name__ == "__main__":
+    dm = POCDataModule(
+        data_dir=ROOT,
+        img_size=IMGSIZE,
+        augmentation=[
+            transforms.ColorJitter(
+                brightness=0.8, contrast=0.5, saturation=0.5, hue=0.5
+            )
+        ],
+    )
+    model = LitLightSteer(learning_rate=LR)
 
-checkpoint_callback = ModelCheckpoint(monitor="val_loss")
-lr_monitor = LearningRateMonitor(logging_interval="step")
+    checkpoint_callback = ModelCheckpoint(
+        monitor="val_loss",
+        dirpath="checkpoint",
+        filename="pocmodel-{epoch:02d}-{val_loss:.4f}",
+        save_top_k=3,
+        mode="min",
+    )
+    lr_monitor = LearningRateMonitor(logging_interval="step")
 
-trainer = pl.Trainer(
-    gpus=1, precision=16, callbacks=[checkpoint_callback, lr_monitor], max_epochs=200
-)
+    trainer = pl.Trainer(
+        gpus=1,
+        precision=16,
+        callbacks=[checkpoint_callback, lr_monitor],
+        max_epochs=500,
+        default_root_dir="checkpoint",
+    )
 
-trainer.fit(model, dm)
+    trainer.fit(model, dm)
