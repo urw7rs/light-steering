@@ -1,4 +1,4 @@
-FROM nvidia/cuda:11.1.1-cudnn8-runtime-ubuntu18.04
+FROM nvidia/cuda:11.1.1-cudnn8-runtime-ubuntu20.04
 
 RUN apt-get update && apt-get install -y \
         python3-pip tmux \
@@ -7,9 +7,14 @@ RUN apt-get update && apt-get install -y \
         matplotlib \
         pandas \
         scikit-learn \
-        jupyterlab \
-        torch \
-        torchvision
+        jupyterlab
+
+RUN pip3 install --no-cache \
+    torch==1.9.0+cu111 \
+    torchvision==0.10.0+cu111 \
+    -f https://download.pytorch.org/whl/torch_stable.html
+
+RUN pip3 install pytorch-lightning
 
 WORKDIR /work
 
