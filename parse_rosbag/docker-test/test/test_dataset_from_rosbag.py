@@ -80,7 +80,7 @@ class TestBagParser(unittest.TestCase):
         self.assertIn("label.csv", os.listdir(output_path), "label.csv not written")
 
         with open(os.path.join(output_path, "label.csv"), "r") as csvfile:
-            csv_reader = csv.reader(csvfile, deliminator=" ", quotechar="|")
+            csv_reader = csv.reader(csvfile, deliminator=",", quotechar="|")
 
             for path, vel, ang in csv_reader:
                 self.assertIn(path, existing_paths, "{path} wasn't written")
