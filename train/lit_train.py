@@ -6,7 +6,6 @@ from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
-from pytorch_lightning.callbacks.lr_monitor import LearningRateMonitor
 
 # datamodule
 import pandas as pd
@@ -307,13 +306,7 @@ class LitLightSteer(pl.LightningModule):
 
     def configure_optimizers(self):
         optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
-        return {
-            "optimizer": optimizer,
-            "lr_scheduler": {
-                "scheduler": torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer),
-                "monitor": "val_loss",
-            },
-        }
+        return optimizer
 
 
 if __name__ == "__main__":
@@ -325,15 +318,7 @@ if __name__ == "__main__":
 
     arg = parser.parse_args()
 
-    dm = POCDataModule(
-        data_dir=ROOT,
-        img_size=IMGSIZE,
-        augmentation=None  # [
-        # transforms.ColorJitter(
-        #    brightness=0.8, contrast=0.5, saturation=0.5, hue=0.5
-        # )
-        # ],
-    )
+    dm = POCDataModule(data_dir=ROOT, img_size=IMGSIZE, augmentation=None)
     model = LitLightSteer(learning_rate=LR)
 
     checkpoint_callback = ModelCheckpoint(
@@ -343,14 +328,13 @@ if __name__ == "__main__":
         save_top_k=3,
         mode="min",
     )
-    lr_monitor = LearningRateMonitor(logging_interval="step")
 
-    logger = TensorBoardLogger("tb_logs", name="nvidia-convnet")
+    logger = TensorBoardLogger("tb_logs", name="model")
     trainer = pl.Trainer(
         gpus=1,
         precision=16,
-        callbacks=[checkpoint_callback, lr_monitor],
-        max_epochs=1000,
+        callbacks=[checkpoint_callback],
+        max_epochs=50,
         default_root_dir=arg.checkpoint,
         logger=logger,
     )
