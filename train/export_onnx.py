@@ -1,7 +1,7 @@
 import argparse
 
 import torch
-from lit_train import LitLightSteer
+from litmodules import LitLightSteer
 
 parser = argparse.ArgumentParser(description="test model.")
 parser.add_argument(
