@@ -3,18 +3,11 @@ from torch import nn
 import torch.nn.functional as F
 import pytorch_lightning as pl
 
-BATCH_SIZE = 64
-ROOT = "/work/dataset"
-IMGSIZE = (64, 48)
-LR = 1e-3
-
 
 class LitLightSteer(pl.LightningModule):
-    def __init__(self, learning_rate):
+    def __init__(self, learning_rate, **kwargs):
         super().__init__()
         self.save_hyperparameters()
-
-        self.learning_rate = learning_rate
 
         self.model = nn.Sequential(
             nn.Conv2d(3, 16, 3, 2),
@@ -58,5 +51,11 @@ class LitLightSteer(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.hparams.learning_rate)
         return optimizer
+
+    @staticmethod
+    def add_model_specific_args(parent_parser):
+        parser = parent_parser.add_argument_group("LightSteer")
+        parser.add_argument("--learning_rate", type=float, default=1e-3)
+        return parent_parser

@@ -5,27 +5,47 @@ from datamodules import POCDataModule
 
 import argparse
 
-parser = argparse.ArgumentParser(description="test model.")
-parser.add_argument(
-    "checkpoint",
-    help="checkpoint path",
-)
 
-arg = parser.parse_args()
+def main(args):
+    pl.seed_everything(42)
 
-PATH = arg.checkpoint
-ROOT = "/work/dataset"
-IMGSIZE = (64, 48)
-LR = 1e-3
+    dm = POCDataModule(
+        data_dir=args.data_dir, img_size=args.img_size, batch_size=args.batch_size
+    )
 
-pl.seed_everything(42)
+    trainer = pl.Trainer.from_argparse_args(args)
+    model = LitLightSteer.load_from_checkpoint(checkpoint_path=args.checkpointfile)
 
-dm = POCDataModule(
-    data_dir=ROOT,
-    img_size=IMGSIZE,
-)
+    trainer.test(model, dm)
 
-model = LitLightSteer.load_from_checkpoint(checkpoint_path=PATH)
 
-trainer = pl.Trainer(gpus=1, precision=16)
-trainer.test(model, dm)
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="test model.")
+    parser.add_argument(
+        "--ckpt_path",
+        type=str,
+        default="best",
+        help="checkpointfile path, inside tb_logs/name/version_/checkpoints",
+    )
+    parser.add_argument(
+        "--data_dir", type=str, default="/work/dataset", help="dataset path"
+    )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=64,
+        help="batch size, learning_rate doesn't change with batch size",
+    )
+    parser.add_argument(
+        "--img_size",
+        type=int,
+        nargs=2,
+        default=[64, 48],
+        help="input image size, .pt files need to be deleted",
+    )
+
+    parser = pl.Trainer.add_argparse_args(parser)
+
+    args = parser.parse_args()
+
+    main(args)

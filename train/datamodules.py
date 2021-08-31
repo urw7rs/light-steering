@@ -10,26 +10,19 @@ from sklearn.model_selection import train_test_split
 from datasets import CustomDataset, RamDataset
 
 
-BATCH_SIZE = 64
-ROOT = "/work/dataset"
-IMGSIZE = (64, 48)
-LR = 1e-3
-
-
 class POCDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir, img_size, augmentation=None, memory=True):
+    def __init__(
+        self, data_dir, img_size, batch_size=64, augmentation=None, memory=True
+    ):
         super().__init__()
 
         self.data_dir = data_dir
+        self.batch_size = batch_size
         self.transform = transforms.Compose(
             [transforms.ToTensor(), transforms.Resize(img_size)]
         )
-
         self.augmentation = augmentation
-
         self.memory = memory
-
-        # self.dims = (3, *img_size)
 
     def prepare_data(self):
         label_path = os.path.join(self.data_dir, "label.csv")
@@ -84,7 +77,7 @@ class POCDataModule(pl.LightningDataModule):
             norm_dataloader = DataLoader(
                 full_dataset,
                 num_workers=len(os.sched_getaffinity(0)),
-                batch_size=BATCH_SIZE,
+                batch_size=self.batch_size,
             )
 
             mean = 0
@@ -154,7 +147,7 @@ class POCDataModule(pl.LightningDataModule):
     def get_dataloader(self, dataset, shuffle=False):
         return DataLoader(
             dataset,
-            batch_size=BATCH_SIZE,
+            batch_size=self.batch_size,
             num_workers=len(os.sched_getaffinity(0)),
             shuffle=shuffle,
             pin_memory=True,

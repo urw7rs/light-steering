@@ -9,40 +9,65 @@ import argparse
 from datamodules import POCDataModule
 from litmodules import LitLightSteer
 
-BATCH_SIZE = 64
-ROOT = "/work/dataset"
-IMGSIZE = (64, 48)
-LR = 1e-3
 
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="train model.")
-    parser.add_argument(
-        "checkpoint",
-        help="checkpoint path",
-    )
-
-    arg = parser.parse_args()
-
-    dm = POCDataModule(data_dir=ROOT, img_size=IMGSIZE, augmentation=None)
-    model = LitLightSteer(learning_rate=LR)
+def main(args):
+    dict_args = vars(args)
 
     checkpoint_callback = ModelCheckpoint(
         monitor="val_loss",
-        dirpath=arg.checkpoint,
-        filename="pocmodel-{epoch:02d}-{val_loss:.8f}",
         save_top_k=3,
         mode="min",
+        auto_insert_metric_name=True,
+        save_last=True,
     )
 
-    logger = TensorBoardLogger("tb_logs", name="model")
-    trainer = pl.Trainer(
-        gpus=1,
-        precision=16,
-        callbacks=[checkpoint_callback],
-        max_epochs=50,
-        default_root_dir=arg.checkpoint,
-        logger=logger,
+    logger = TensorBoardLogger("tb_logs", name=args.name)
+    trainer = pl.Trainer.from_argparse_args(
+        args, callbacks=[checkpoint_callback], logger=logger
     )
+
+    dm = POCDataModule(
+        data_dir=args.data_dir,
+        img_size=args.img_size,
+        batch_size=args.batch_size,
+    )
+
+    model = LitLightSteer(**dict_args)
 
     trainer.fit(model, dm)
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+
+    # add PROGRAM level args
+    parser.add_argument(
+        "--data_dir", type=str, default="/work/dataset", help="dataset path"
+    )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=64,
+        help="batch size, learning_rate doesn't change with batch size",
+    )
+    parser.add_argument(
+        "--img_size",
+        type=int,
+        nargs=2,
+        default=[64, 48],
+        help="input image size, .pt files need to be deleted",
+    )
+    parser.add_argument(
+        "--name", type=str, default="default", help="tensorboard logger name"
+    )
+
+    # add model specific args
+    parser = LitLightSteer.add_model_specific_args(parser)
+
+    # add all the available trainer options to argparse
+    # ie: now --gpus --num_nodes ... --fast_dev_run all work in the cli
+    parser = pl.Trainer.add_argparse_args(parser)
+
+    args = parser.parse_args()
+
+    main(args)
