@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
 # Copyright 2016 Massachusetts Institute of Technology
@@ -46,10 +46,10 @@ def parse_bag(bag, output_path):
 
             cv_img = bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
 
-            path = os.path.join("image", f"{n_image}.png")
+            path = os.path.join("image", "{}.png".format(n_image))
             save_path = os.path.join(output_path, path)
             if os.path.isfile(save_path):
-                print(f"skipping {save_path} already written")
+                print("skipping {} already written".format(save_path))
             else:
                 cv2.imwrite(save_path, cv_img)
 
@@ -102,7 +102,7 @@ def main():
     args = parser.parse_args()
 
     for bag_path in os.listdir(args.bagdir_path):
-        print(f"parsing {bag_path}")
+        print("parsing {}".format(bag_path))
 
         bag = rosbag.Bag(os.path.join(args.bagdir_path, bag_path), "r")
 
@@ -114,7 +114,7 @@ def main():
 
         bag.close()
 
-        print(f"parsed {bag_path}: {n_image} written, {copied} copied ")
+        print("parsed {}: {} written, {} copied ".format(bag_path, n_image, copied))
 
 
 if __name__ == "__main__":

@@ -48,7 +48,7 @@ logger = TensorBoardLogger("tb_logs", name="nvidia-convnet")
 trainer = pl.Trainer(
     gpus=1,
     precision=16,
-    callbacks=[checkpoint_callback, lr_monitor],
+    callbacks=[checkpoint_callback],
     max_epochs=1000,
     default_root_dir="checkpoint",
     logger=logger,

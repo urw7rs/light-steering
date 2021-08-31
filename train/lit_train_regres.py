@@ -29,7 +29,7 @@ LR = 1e-3
 class CustomDataset(Dataset):
     def __init__(self, root, split, transform=None, target_transform=None):
         self.path_col = "path"
-        self.label_cols = ["ang"]
+        self.label_cols = ["vel", "ang"]
 
         self.root = root
         self.transform = transform
@@ -76,6 +76,7 @@ class RamDataset(Dataset):
             data = []
             label = []
             for x, y in dataloader:
+                print("hi")
                 data.append(x)
                 label.append(y)
 
@@ -102,9 +103,7 @@ class RamDataset(Dataset):
 
 
 class POCDataModule(pl.LightningDataModule):
-    def __init__(
-        self, data_dir, img_size, regression=False, augmentation=None, memory=True
-    ):
+    def __init__(self, data_dir, img_size, augmentation=None, memory=True):
         super().__init__()
 
         self.data_dir = data_dir
@@ -112,13 +111,12 @@ class POCDataModule(pl.LightningDataModule):
             [transforms.ToTensor(), transforms.Resize(img_size)]
         )
 
-        self.regression = regression
         self.augmentation = augmentation
         self.memory = memory
 
     def prepare_data(self):
         label_path = os.path.join(self.data_dir, "label.csv")
-        if not os.path.isfile(label_path) or self.regression:
+        if not os.path.isfile(label_path):
             path_col = "path"
             label_cols = ["vel", "ang"]
 
@@ -144,19 +142,6 @@ class POCDataModule(pl.LightningDataModule):
 
             # filter bad data
             df = df[df.loc[:, "vel"] > 0]
-
-            if self.regression:
-
-                def classify(ang):
-                    if ang > 0.1:
-                        return 2  # right (0.7)
-                    elif ang <= 0.1:
-                        if ang >= -0.1:
-                            return 1  # straight (0.0)
-                        elif ang < -0.1:
-                            return 0  # left (-0.7)
-
-                df.loc[:, "ang"] = df["ang"].apply(classify)
 
             # split into train val test 0.96 0.02 0.02
             train, test = train_test_split(df, test_size=0.2)
@@ -224,34 +209,18 @@ class POCDataModule(pl.LightningDataModule):
         # Assign train/val datasets for use in dataloaders
         if stage == "fit" or stage is None:
             self.train = CustomDataset(
-                self.data_dir,
-                split="train",
-                transform=self.transform,
+                self.data_dir, split="train", transform=self.transform
             )
             self.val = CustomDataset(
-                self.data_dir,
-                split="val",
-                transform=self.transform,
+                self.data_dir, split="val", transform=self.transform
             )
 
             if self.memory:
-                train_f = "train.pt"
-                val_f = "val.pt"
-                test_f = "test.pt"
-                if not self.regression:
-                    train_f = "train-class.pt"
-                    val_f = "val-class.pt"
-                    test_f = "test-class.pt"
-
                 self.train = RamDataset(
-                    dataset=self.train,
-                    f=train_f,
-                    transform=self.augmentation,
+                    dataset=self.train, f="train.pt", transform=self.augmentation
                 )
                 self.val = RamDataset(
-                    dataset=self.val,
-                    f=val_f,
-                    transform=self.augmentation,
+                    dataset=self.val, f="val.pt", transform=self.augmentation
                 )
 
         # Assign test dataset for use in dataloader(s)
@@ -262,7 +231,7 @@ class POCDataModule(pl.LightningDataModule):
 
             if self.memory:
                 self.test = RamDataset(
-                    dataset=self.test, f=test_f, transform=self.augmentation
+                    dataset=self.test, f="test.pt", transform=self.augmentation
                 )
 
     def get_dataloader(self, dataset, shuffle=False):
@@ -293,16 +262,12 @@ class LitLightSteer(pl.LightningModule):
 
         self.model = nn.Sequential(
             nn.Conv2d(3, 16, 3, 2, 1),
-            nn.Dropout2d(),
             nn.ReLU(),
             nn.Conv2d(16, 32, 3, 2, 1),
-            nn.Dropout2d(),
             nn.ReLU(),
             nn.Conv2d(32, 64, 3, 2, 1),
-            nn.Dropout2d(),
             nn.ReLU(),
             nn.Conv2d(64, 128, 3, 2, 1),
-            nn.Dropout2d(),
             nn.ReLU(),
             nn.Flatten(),
             nn.LazyLinear(500),
@@ -311,7 +276,7 @@ class LitLightSteer(pl.LightningModule):
             nn.Linear(500, 100),
             nn.Dropout(),
             nn.ReLU(),
-            nn.Linear(100, 3),
+            nn.Linear(100, 2),
         )
 
     def forward(self, x):
@@ -321,26 +286,29 @@ class LitLightSteer(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self.model(x)
-        loss = F.cross_entropy(y_hat, y.view(-1).long())
+        loss = F.mse_loss(y_hat, y)
         self.log("train_loss", loss, prog_bar=True)
         return loss
 
     def validation_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self.model(x)
-        loss = F.cross_entropy(y_hat, y.view(-1).long())
+        loss = F.mse_loss(y_hat, y)
         self.log("val_loss", loss, prog_bar=True)
         return loss
 
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self.model(x)
-        loss = F.cross_entropy(y_hat, y.view(-1).long())
+        vel = 1.2 * torch.sigmoid(y_hat[:, 0])
+        ang = 0.7 * torch.tanh(y_hat[:, 1])
+        y = torch.cat([vel, ang], dim=1)
+        loss = F.mse_loss(y_hat, y)
         self.log("test_loss", loss, prog_bar=True)
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.learning_rate)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return {
             "optimizer": optimizer,
             "lr_scheduler": {
@@ -362,30 +330,29 @@ if __name__ == "__main__":
     dm = POCDataModule(
         data_dir=ROOT,
         img_size=IMGSIZE,
-        augmentation=None,  # [
+        augmentation=None  # [
         # transforms.ColorJitter(
         #    brightness=0.8, contrast=0.5, saturation=0.5, hue=0.5
         # )
         # ],
-        regression=False,
     )
     model = LitLightSteer(learning_rate=LR)
 
     checkpoint_callback = ModelCheckpoint(
         monitor="val_loss",
         dirpath=arg.checkpoint,
-        filename="model-{epoch:02d}-{val_loss:.8f}",
+        filename="pocmodel-{epoch:02d}-{val_loss:.8f}",
         save_top_k=3,
         mode="min",
     )
     lr_monitor = LearningRateMonitor(logging_interval="step")
 
-    logger = TensorBoardLogger("tb_logs", name="model")
+    logger = TensorBoardLogger("tb_logs", name="nvidia-convnet")
     trainer = pl.Trainer(
         gpus=1,
         precision=16,
         callbacks=[checkpoint_callback, lr_monitor],
-        max_epochs=50,
+        max_epochs=1000,
         default_root_dir=arg.checkpoint,
         logger=logger,
     )
