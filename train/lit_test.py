@@ -1,8 +1,7 @@
-import os
-
 import pytorch_lightning as pl
 
-from lit_train import LitLightSteer, POCDataModule
+from litmodules import LitLightSteer
+from datamodules import POCDataModule
 
 import argparse
 
