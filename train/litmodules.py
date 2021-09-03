@@ -39,6 +39,8 @@ class LitLightSteer(pl.LightningModule):
     def validation_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self.model(x)
+        y_hat[:, 0] = 1.2 * torch.sigmoid(y_hat[:, 0])
+        y_hat[:, 1] = 0.7 * torch.tanh(y_hat[:, 1])
         loss = F.mse_loss(y_hat, y)
         self.log("val_loss", loss, prog_bar=True)
         return loss
@@ -46,6 +48,8 @@ class LitLightSteer(pl.LightningModule):
     def test_step(self, batch, batch_idx):
         x, y = batch
         y_hat = self.model(x)
+        y_hat[:, 0] = 1.2 * torch.sigmoid(y_hat[:, 0])
+        y_hat[:, 1] = 0.7 * torch.tanh(y_hat[:, 1])
         loss = F.mse_loss(y_hat, y)
         self.log("test_loss", loss, prog_bar=True)
         return loss
