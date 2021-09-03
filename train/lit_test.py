@@ -14,7 +14,7 @@ def main(args):
     )
 
     trainer = pl.Trainer.from_argparse_args(args)
-    model = LitLightSteer.load_from_checkpoint(checkpoint_path=args.checkpointfile)
+    model = LitLightSteer.load_from_checkpoint(checkpoint_path=args.ckpt_path)
 
     trainer.test(model, dm)
 
