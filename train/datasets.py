@@ -7,11 +7,6 @@ import numpy as np
 
 from PIL import Image
 
-BATCH_SIZE = 64
-ROOT = "/work/dataset"
-IMGSIZE = (64, 48)
-LR = 1e-3
-
 
 class CustomDataset(Dataset):
     def __init__(self, root, split, transform=None, target_transform=None):
