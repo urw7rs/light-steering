@@ -49,8 +49,8 @@ class LitLightSteer(pl.LightningModule):
         loss, vel_loss, ang_loss = self._compute_loss(vel, ang, y)
 
         self.log("val_loss", loss, prog_bar=True)
-        self.log("vel_loss", vel_loss, prog_bar=True)
-        self.log("ang_loss", ang_loss, prog_bar=True)
+        self.log("val_vel_loss", vel_loss, prog_bar=True)
+        self.log("val_ang_loss", ang_loss, prog_bar=True)
 
         return loss
 
@@ -60,8 +60,8 @@ class LitLightSteer(pl.LightningModule):
         loss, vel_loss, ang_loss = self._compute_loss(vel, ang, y)
 
         self.log("test_loss", loss, prog_bar=True)
-        self.log("vel_loss", vel_loss, prog_bar=True)
-        self.log("ang_loss", ang_loss, prog_bar=True)
+        self.log("test_vel_loss", vel_loss, prog_bar=True)
+        self.log("test_ang_loss", ang_loss, prog_bar=True)
 
         return loss
 
