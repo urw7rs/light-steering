@@ -7,13 +7,11 @@ from torchvision import transforms
 from sklearn.model_selection import train_test_split
 
 # local files
-from datasets import CustomDataset, RamDataset
+from datasets import CustomDataset
 
 
 class POCDataModule(pl.LightningDataModule):
-    def __init__(
-        self, data_dir, img_size, batch_size=64, augmentation=None, memory=True
-    ):
+    def __init__(self, data_dir, img_size, batch_size=64, augmentation=None):
         super().__init__()
 
         self.data_dir = data_dir
@@ -22,7 +20,6 @@ class POCDataModule(pl.LightningDataModule):
             [transforms.ToTensor(), transforms.Resize(img_size)]
         )
         self.augmentation = augmentation
-        self.memory = memory
 
     def prepare_data(self):
         label_path = os.path.join(self.data_dir, "label.csv")
@@ -113,20 +110,9 @@ class POCDataModule(pl.LightningDataModule):
             mean = df["mean"].tolist()
             std = df["std"].tolist()
 
-        if self.augmentation is None:
-            after_transforms = [
-                transforms.Normalize(mean, std),
-            ]
-        else:
-            after_transforms = [
-                *self.augmentation,
-                transforms.Normalize(mean, std),
-            ]
-
-        if self.memory:
-            self.augmentation = transforms.Compose(after_transforms)
-        else:
-            self.transform.transforms.extend(after_transforms)
+        if self.augmentation is not None:
+            self.transform.transforms.extend(self.augmentation)
+        self.transform.transforms.append(transforms.Normalize(mean, std))
 
     def setup(self, stage=None):
         # Assign train/val datasets for use in dataloaders
@@ -142,18 +128,6 @@ class POCDataModule(pl.LightningDataModule):
                 transform=self.transform,
             )
 
-            if self.memory:
-                self.train = RamDataset(
-                    dataset=self.train,
-                    f="train.pt",
-                    transform=self.augmentation,
-                )
-                self.val = RamDataset(
-                    dataset=self.val,
-                    f="val.pt",
-                    transform=self.augmentation,
-                )
-
         # Assign test dataset for use in dataloader(s)
         if stage == "test" or stage is None:
             self.test = CustomDataset(
@@ -161,13 +135,6 @@ class POCDataModule(pl.LightningDataModule):
                 split="test",
                 transform=self.transform,
             )
-
-            if self.memory:
-                self.test = RamDataset(
-                    dataset=self.test,
-                    f="test.pt",
-                    transform=self.augmentation,
-                )
 
     def get_dataloader(self, dataset, shuffle=False):
         return DataLoader(
