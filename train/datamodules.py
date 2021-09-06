@@ -54,7 +54,7 @@ class POCDataModule(pl.LightningDataModule):
             df = df[df.loc[:, "vel"] > 0]
 
             # split into train val test 0.96 0.02 0.02
-            train, test = train_test_split(df, test_size=0.2)
+            train, test = train_test_split(df, test_size=0.4)
             test, val = train_test_split(test, test_size=0.5)
 
             # add split column and concat
@@ -74,41 +74,54 @@ class POCDataModule(pl.LightningDataModule):
             full_dataset = CustomDataset(
                 self.data_dir, split="all", transform=self.transform
             )
+
             norm_dataloader = DataLoader(
                 full_dataset,
                 num_workers=len(os.sched_getaffinity(0)),
                 batch_size=self.batch_size,
             )
 
-            mean = 0
-            mean_squared = 0
-            n = 0
+            mean = []
+            squared_mean = []
+            weights = []
+            N = float(len(full_dataset))
             for x, _ in norm_dataloader:
-                x = x.to("cuda")
-                n += x.shape[1]
                 with torch.no_grad():
-                    mean += x.mean(dim=(0, 2, 3))
-                    mean_squared += (x ** 2).mean(dim=(0, 2, 3))
+                    mean.append(x.mean(dim=(0, 2, 3)))
+                    squared_mean.append((x ** 2).mean(dim=(0, 2, 3)))
+                    weights.append(float(x.shape[1]))
+
+            mean = torch.stack(mean, dim=-1)
+            squared_mean = torch.stack(squared_mean, dim=-1)
+
+            weights = torch.tensor(weights).unsqueeze(dim=-1)
 
             with torch.no_grad():
-                mean = mean / n
-                mean_squared = mean_squared / n
-                std = torch.sqrt(mean_squared - mean ** 2)
+                mean = torch.mm(mean, weights) / N
+                squared_mean = torch.mm(squared_mean, weights) / N
+                std = torch.sqrt(squared_mean - mean ** 2)
 
-            mean = mean.cpu().numpy().tolist()
-            std = std.cpu().numpy().tolist()
+            mean = mean.squeeze().numpy().tolist()
+            std = std.squeeze().numpy().tolist()
 
             df = pd.DataFrame(dict(mean=mean, std=std))
             df.to_csv(norm_path)
+
+            print("saved to csv file")
         else:
             df = pd.read_csv(norm_path)
             mean = df["mean"].tolist()
             std = df["std"].tolist()
 
         if self.augmentation is None:
-            after_transforms = [transforms.Normalize(mean, std)]
+            after_transforms = [
+                transforms.Normalize(mean, std),
+            ]
         else:
-            after_transforms = [*self.augmentation, transforms.Normalize(mean, std)]
+            after_transforms = [
+                *self.augmentation,
+                transforms.Normalize(mean, std),
+            ]
 
         if self.memory:
             self.augmentation = transforms.Compose(after_transforms)
@@ -119,29 +132,41 @@ class POCDataModule(pl.LightningDataModule):
         # Assign train/val datasets for use in dataloaders
         if stage == "fit" or stage is None:
             self.train = CustomDataset(
-                self.data_dir, split="train", transform=self.transform
+                self.data_dir,
+                split="train",
+                transform=self.transform,
             )
             self.val = CustomDataset(
-                self.data_dir, split="val", transform=self.transform
+                self.data_dir,
+                split="val",
+                transform=self.transform,
             )
 
             if self.memory:
                 self.train = RamDataset(
-                    dataset=self.train, f="train.pt", transform=self.augmentation
+                    dataset=self.train,
+                    f="train.pt",
+                    transform=self.augmentation,
                 )
                 self.val = RamDataset(
-                    dataset=self.val, f="val.pt", transform=self.augmentation
+                    dataset=self.val,
+                    f="val.pt",
+                    transform=self.augmentation,
                 )
 
         # Assign test dataset for use in dataloader(s)
         if stage == "test" or stage is None:
             self.test = CustomDataset(
-                self.data_dir, split="test", transform=self.transform
+                self.data_dir,
+                split="test",
+                transform=self.transform,
             )
 
             if self.memory:
                 self.test = RamDataset(
-                    dataset=self.test, f="test.pt", transform=self.augmentation
+                    dataset=self.test,
+                    f="test.pt",
+                    transform=self.augmentation,
                 )
 
     def get_dataloader(self, dataset, shuffle=False):
