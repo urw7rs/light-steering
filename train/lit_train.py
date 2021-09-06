@@ -58,7 +58,7 @@ if __name__ == "__main__":
         "--img_size",
         type=int,
         nargs=2,
-        default=[64, 48],
+        default=[48, 64],
         help="input image size, .pt files need to be deleted",
     )
     parser.add_argument(
