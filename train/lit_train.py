@@ -1,10 +1,8 @@
+import argparse
+
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
-
-# logger
 from pytorch_lightning.loggers import TensorBoardLogger
-
-import argparse
 
 from datamodules import POCDataModule
 from litmodules import LitLightSteer
@@ -41,6 +39,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
 
     # add PROGRAM level args
+    parser.add_argument(
+        "--ckpt_path",
+        type=str,
+        default="best",
+        help="checkpointfile path, inside tb_logs/name/version_/checkpoints",
+    )
     parser.add_argument(
         "--data_dir", type=str, default="/work/dataset", help="dataset path"
     )
