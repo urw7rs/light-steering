@@ -7,19 +7,27 @@ from torchvision import transforms
 from sklearn.model_selection import train_test_split
 
 # local files
-from datasets import CustomDataset
+from datasets import CustomDataset, cache_dataset
 
 
 class POCDataModule(pl.LightningDataModule):
-    def __init__(self, data_dir, img_size, batch_size=64, augmentation=None):
+    def __init__(
+        self,
+        data_dir,
+        img_size,
+        batch_size=64,
+        train_f="train.pt",
+        val_f="val.pt",
+        test_f="test.pt",
+    ):
         super().__init__()
 
         self.data_dir = data_dir
+        self.img_size = img_size
         self.batch_size = batch_size
-        self.transform = transforms.Compose(
-            [transforms.ToTensor(), transforms.Resize(img_size)]
-        )
-        self.augmentation = augmentation
+        self.train_f = train_f
+        self.val_f = val_f
+        self.test_f = test_f
 
     def prepare_data(self):
         label_path = os.path.join(self.data_dir, "label.csv")
@@ -110,30 +118,44 @@ class POCDataModule(pl.LightningDataModule):
             mean = df["mean"].tolist()
             std = df["std"].tolist()
 
-        if self.augmentation is not None:
-            self.transform.transforms.extend(self.augmentation)
-        self.transform.transforms.append(transforms.Normalize(mean, std))
+        self.transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Resize(self.img_size),
+                transforms.Normalize(mean, std),
+            ]
+        )
 
     def setup(self, stage=None):
+
         # Assign train/val datasets for use in dataloaders
         if stage == "fit" or stage is None:
-            self.train = CustomDataset(
-                self.data_dir,
-                split="train",
-                transform=self.transform,
+            self.train = cache_dataset(
+                CustomDataset(
+                    self.data_dir,
+                    split="train",
+                    transform=self.transform,
+                ),
+                f=self.train_f,
             )
-            self.val = CustomDataset(
-                self.data_dir,
-                split="val",
-                transform=self.transform,
+            self.val = cache_dataset(
+                CustomDataset(
+                    self.data_dir,
+                    split="val",
+                    transform=self.transform,
+                ),
+                f=self.val_f,
             )
 
         # Assign test dataset for use in dataloader(s)
         if stage == "test" or stage is None:
-            self.test = CustomDataset(
-                self.data_dir,
-                split="test",
-                transform=self.transform,
+            self.test = cache_dataset(
+                CustomDataset(
+                    self.data_dir,
+                    split="test",
+                    transform=self.transform,
+                ),
+                f=self.test_f,
             )
 
     def get_dataloader(self, dataset, shuffle=False):

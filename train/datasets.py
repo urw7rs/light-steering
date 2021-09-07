@@ -1,11 +1,14 @@
 import os
-from torch.utils.data import Dataset
 
-# datamodule
+import torch
+from torch.utils.data import Dataset, DataLoader, TensorDataset
+
 import pandas as pd
 import numpy as np
 
 from PIL import Image
+
+from tqdm import tqdm
 
 
 class CustomDataset(Dataset):
@@ -27,8 +30,8 @@ class CustomDataset(Dataset):
             elif split == "test":
                 split = 2
 
-            df.where(df.loc[:, "split"] == split)
-            df.dropna()
+            df = df.where(df.loc[:, "split"] == split)
+            df = df.dropna()
 
         self.df = df.drop(["split"], axis=1)
 
@@ -36,10 +39,10 @@ class CustomDataset(Dataset):
         image = Image.open(
             os.path.join(
                 self.root,
-                self.df.loc[idx, self.path_col],
+                self.df.loc[self.df.index[idx], self.path_col],
             )
         )
-        vel_ang = self.df.loc[idx, self.label_cols].values
+        vel_ang = self.df.loc[self.df.index[idx], self.label_cols].values
         vel_ang = vel_ang.astype(np.float32)
 
         if self.transform is not None:
@@ -51,3 +54,25 @@ class CustomDataset(Dataset):
 
     def __len__(self):
         return len(self.df)
+
+
+def cache_dataset(dataset, f):
+    if os.path.isfile(f):
+        data, label = torch.load(f)
+    else:
+        print(f"creating cache file {f}")
+        # num_workers 0 and batch_size 1 is much faster
+        dataloader = DataLoader(dataset, num_workers=0, batch_size=1)
+
+        data = []
+        label = []
+        for i, (x, y) in enumerate(tqdm(dataloader)):
+            data.append(x)
+            label.append(y)
+
+        data = torch.cat(data, dim=0)
+        label = torch.cat(label, dim=0)
+
+        torch.save((data, label), f)
+
+    return TensorDataset(data, label)
