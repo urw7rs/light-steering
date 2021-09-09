@@ -1,20 +1,15 @@
 import torch
-from torch import nn
 import torch.nn.functional as F
+
 import pytorch_lightning as pl
-import torchvision.models as models
 
 
 class LitLightSteer(pl.LightningModule):
-    def __init__(self, learning_rate, **kwargs):
+    def __init__(self, model, learning_rate, **kwargs):
         super().__init__()
-        self.save_hyperparameters()
-
-        resnet18 = models.resnet18()
-        num_ftrs = resnet18.fc.in_features
-        resnet18.fc = nn.Linear(num_ftrs, 2)
-
-        self.model = resnet18
+        self.save_hyperparameters("learning_rate")
+        # self.save_hyperparameters()
+        self.model = model
 
     def forward(self, x):
         y = self.model(x)
@@ -66,9 +61,11 @@ class LitLightSteer(pl.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(
+        optimizer = torch.optim.SGD(
             self.parameters(),
             lr=self.hparams.learning_rate,
+            weight_decay=0.01,
+            momentum=0.9,
         )
         return optimizer
 

@@ -2,19 +2,21 @@ import pytorch_lightning as pl
 
 from litmodules import LitLightSteer
 from datamodules import POCDataModule
+from torch_models import Model
 
 import argparse
 
 
 def main(args):
+    dict_args = vars(args)
     pl.seed_everything(42)
 
-    dm = POCDataModule(
-        data_dir=args.data_dir, img_size=args.img_size, batch_size=args.batch_size
-    )
+    dm = POCDataModule(**dict_args)
 
     trainer = pl.Trainer.from_argparse_args(args)
-    model = LitLightSteer.load_from_checkpoint(checkpoint_path=args.ckpt_path)
+    model = LitLightSteer.load_from_checkpoint(
+        checkpoint_path=args.ckpt_path, model=Model()
+    )
 
     trainer.test(model, dm)
 

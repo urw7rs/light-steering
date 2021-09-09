@@ -19,6 +19,7 @@ class POCDataModule(pl.LightningDataModule):
         train_f="train.pt",
         val_f="val.pt",
         test_f="test.pt",
+        **kwargs
     ):
         super().__init__()
 
@@ -28,6 +29,13 @@ class POCDataModule(pl.LightningDataModule):
         self.train_f = train_f
         self.val_f = val_f
         self.test_f = test_f
+
+        self.transform = transforms.Compose(
+            [
+                transforms.ToTensor(),
+                transforms.Resize(self.img_size),
+            ]
+        )
 
     def prepare_data(self):
         label_path = os.path.join(self.data_dir, "label.csv")
@@ -58,9 +66,12 @@ class POCDataModule(pl.LightningDataModule):
             # filter bad data
             df = df[df.loc[:, "vel"] > 0]
 
+            # remove velocity data
+            # df = df.drop(["vel"], axis=1)
+
             # split into train val test 0.96 0.02 0.02
-            train, test = train_test_split(df, test_size=0.4)
-            test, val = train_test_split(test, test_size=0.5)
+            train, test = train_test_split(df, test_size=0.2)
+            train, val = train_test_split(train, test_size=0.2 / (0.2 + 0.6))
 
             # add split column and concat
             splits = [train, val, test]
@@ -74,6 +85,8 @@ class POCDataModule(pl.LightningDataModule):
         # find mean and std for normalization
         norm_path = os.path.join(self.data_dir, "norm.csv")
         if not os.path.isfile(norm_path):
+            from tqdm import tqdm
+
             print("normalization file not found computing mean and std...")
 
             full_dataset = CustomDataset(
@@ -90,7 +103,7 @@ class POCDataModule(pl.LightningDataModule):
             squared_mean = []
             weights = []
             N = float(len(full_dataset))
-            for x, _ in norm_dataloader:
+            for i, (x, _) in enumerate(tqdm(norm_dataloader)):
                 with torch.no_grad():
                     mean.append(x.mean(dim=(0, 2, 3)))
                     squared_mean.append((x ** 2).mean(dim=(0, 2, 3)))
@@ -158,17 +171,18 @@ class POCDataModule(pl.LightningDataModule):
                 f=self.test_f,
             )
 
-    def get_dataloader(self, dataset, shuffle=False):
+    def get_dataloader(self, dataset, shuffle=False, drop_last=False):
         return DataLoader(
             dataset,
             batch_size=self.batch_size,
             num_workers=len(os.sched_getaffinity(0)),
             shuffle=shuffle,
             pin_memory=True,
+            drop_last=drop_last,
         )
 
     def train_dataloader(self):
-        return self.get_dataloader(self.train, shuffle=True)
+        return self.get_dataloader(self.train, shuffle=True, drop_last=True)
 
     def val_dataloader(self):
         return self.get_dataloader(self.val)

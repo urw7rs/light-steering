@@ -4,10 +4,9 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 
-from torchvision import transforms
-
 from datamodules import POCDataModule
 from litmodules import LitLightSteer
+from torch_models import Model
 
 
 def main(args):
@@ -35,9 +34,9 @@ def main(args):
         test_f=args.test_f,
     )
 
-    model = LitLightSteer(**dict_args)
+    litmodel = LitLightSteer(model=Model(), **dict_args)
 
-    trainer.fit(model, dm)
+    trainer.fit(litmodel, dm)
 
 
 if __name__ == "__main__":
@@ -79,13 +78,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--val_f",
         type=str,
-        default="train.pt",
+        default="val.pt",
         help="dataset cache file path",
     )
     parser.add_argument(
         "--test_f",
         type=str,
-        default="train.pt",
+        default="test.pt",
         help="dataset cache file path",
     )
 

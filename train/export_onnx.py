@@ -2,12 +2,15 @@ import argparse
 
 import torch
 from litmodules import LitLightSteer
+from torch_models import Model
 
 
 def main(args):
     input_sample = torch.randn(1, 3, *args.img_size)
 
-    model = LitLightSteer.load_from_checkpoint(checkpoint_path=args.ckpt_path)
+    model = LitLightSteer.load_from_checkpoint(
+        checkpoint_path=args.ckpt_path, model=Model()
+    )
     model.to_onnx(args.onnx_path, input_sample, export_params=True)
 
 
