@@ -15,8 +15,8 @@ class Model:
         self.net = cv2.dnn.readNetFromONNX("model.onnx")
 
         self.size = size
-        self.mean = (np.array(mean) * 255).tolist()
-        self.std = np.expand_dims(np.array(std), axis=(0, 2, 3)) * 255
+        self.mean = list(mean)
+        self.std = np.array(std).reshape(1, -1, 1, 1)
 
         self.bridge = CvBridge()
         self.twist = Twist()
@@ -39,8 +39,7 @@ class Model:
         vel = y[:, 0]
         ang = y[:, 1]
 
-        vel = 0.5
-        # vel = 0.5 * float(1 / (1 + np.exp(-vel)))
+        vel = 0.5 * float(1 / (1 + np.exp(-vel)))
         ang = 0.7 * float(np.tanh(ang))
 
         # check vel coeff is 1.2 and ang coeff is 0.7
@@ -56,7 +55,8 @@ if __name__ == "__main__":
     rospy.init_node("dnn")
     model = Model(
         mean=(6.71231037, 6.958573731, 6.694267038),
-        std=(33.4571363, 34.63760756, 34.05796006),
+        # std=(33.4571363, 34.63760756, 34.05796006),
+        std=(0.131204456, 0.135833755, 0.133560628),
         size=(48, 64),
     )
     rospy.spin()
