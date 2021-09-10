@@ -71,11 +71,9 @@ WORKDIR /home/ros_ws/src
 
 RUN catkin_create_pkg parse rospy std_msgs
 
-COPY parse/src/* /home/ros_ws/src/parse/src/
+COPY parse.py  /home/
 
 WORKDIR /home
-
-COPY parse.sh .
 
 # bind mount bag file directory to /home/bag_files, output directory to /home/output
 # run rosrun parse dataset_from_rosbag.py bag_files output or ./parse.sh

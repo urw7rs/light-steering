@@ -103,34 +103,26 @@ image_topic = "/usb_cam/image_raw"
 label_topic = "/cmd_vel"
 
 
-def main():
-    parser = argparse.ArgumentParser(
-        description="Extract images and labels from a ROS bag"
-    )
-    parser.add_argument("bagdir_path", help="ros bag file")
-    parser.add_argument(
-        "output_path",
-        help="directory to save images and labels",
-    )
-    parser.add_argument(
-        "--img_size",
-        type=int,
-        nargs=2,
-        default=[48, 64],
-        help="directory to save images and labels",
-    )
+parser = argparse.ArgumentParser()
+parser.add_argument("bagdir_path", help="ros bag file")
+parser.add_argument(
+    "output_path",
+    help="directory to save images and labels",
+)
+parser.add_argument(
+    "--img_size",
+    type=int,
+    nargs=2,
+    default=[48, 64],
+    help="directory to save images and labels",
+)
 
-    args = parser.parse_args()
+args = parser.parse_args()
 
-    global bagdir_path, output_path, img_size
-
-    bagdir_path = args.bagdir_path
-    output_path = args.output_path
-    img_size = tuple(args.img_size)
-
-    with Pool(len(os.sched_getaffinity(0))) as p:
-        p.map(parse_bag, os.listdir(args.bagdir_path))
-
+bagdir_path = args.bagdir_path
+output_path = args.output_path
+img_size = tuple(args.img_size)
 
 if __name__ == "__main__":
-    main()
+    with Pool(len(os.sched_getaffinity(0))) as p:
+        p.map(parse_bag, os.listdir(args.bagdir_path))
