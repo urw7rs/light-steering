@@ -83,7 +83,7 @@ def parse_bag(bag, output_path):
     df = pd.DataFrame(data, columns=["path", "vel", "ang"])
 
     csv_path = os.path.join(output_path, "label.csv")
-    df.to_csv(csv_path)
+    df.to_csv(csv_path, index=False)
 
     return n_image, copied
 
