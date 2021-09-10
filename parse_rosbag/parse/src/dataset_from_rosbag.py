@@ -5,6 +5,8 @@
 
 import os
 
+from multiprocessing import Pool
+
 import argparse
 
 import numpy as np
@@ -23,8 +25,14 @@ def get_label(msg):
     return vel, ang
 
 
-def parse_bag(bag, output_path):
-    img_path = os.path.join(output_path, "image")
+def parse_bag(bag_path):
+    bag = rosbag.Bag(os.path.join(bagdir_path, bag_path), "r")
+
+    sub_path = os.path.join(output_path, bag_path[:-4])
+    if not os.path.isdir(sub_path):
+        os.mkdir(sub_path)
+
+    img_path = os.path.join(sub_path, "image")
     if not os.path.isdir(img_path):
         os.mkdir(img_path)
 
@@ -47,10 +55,11 @@ def parse_bag(bag, output_path):
             cv_img = bridge.imgmsg_to_cv2(msg, desired_encoding="passthrough")
 
             path = os.path.join("image", f"{n_image}.png")
-            save_path = os.path.join(output_path, path)
+            save_path = os.path.join(sub_path, path)
             if os.path.isfile(save_path):
                 print(f"skipping {save_path} already written")
             else:
+                cv2.resize(cv_img, tuple(img_size))
                 cv2.imwrite(save_path, cv_img)
 
             path_list.append(path)
@@ -85,7 +94,9 @@ def parse_bag(bag, output_path):
     csv_path = os.path.join(output_path, "label.csv")
     df.to_csv(csv_path, index=False)
 
-    return n_image, copied
+    bag.close()
+
+    print(f"parsed {bag_path}: {n_image} written, {copied} copied ")
 
 
 image_topic = "/usb_cam/image_raw"
@@ -97,24 +108,28 @@ def main():
         description="Extract images and labels from a ROS bag"
     )
     parser.add_argument("bagdir_path", help="ros bag file")
-    parser.add_argument("output_path", help="directory to save images and labels")
+    parser.add_argument(
+        "output_path",
+        help="directory to save images and labels",
+    )
+    parser.add_argument(
+        "--img_size",
+        type=int,
+        nargs=2,
+        default=[48, 64],
+        help="directory to save images and labels",
+    )
 
     args = parser.parse_args()
 
-    for bag_path in os.listdir(args.bagdir_path):
-        print(f"parsing {bag_path}")
+    global bagdir_path, output_path, img_size
 
-        bag = rosbag.Bag(os.path.join(args.bagdir_path, bag_path), "r")
+    bagdir_path = args.bagdir_path
+    output_path = args.output_path
+    img_size = tuple(args.img_size)
 
-        output_path = os.path.join(args.output_path, bag_path[:-4])
-        if not os.path.isdir(output_path):
-            os.mkdir(output_path)
-
-        n_image, copied = parse_bag(bag, output_path)
-
-        bag.close()
-
-        print(f"parsed {bag_path}: {n_image} written, {copied} copied ")
+    with Pool(len(os.sched_getaffinity(0))) as p:
+        p.map(parse_bag, os.listdir(args.bagdir_path))
 
 
 if __name__ == "__main__":
