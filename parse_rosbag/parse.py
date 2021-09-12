@@ -91,7 +91,7 @@ def parse_bag(bag_path):
 
     df = pd.DataFrame(data, columns=["path", "vel", "ang"])
 
-    csv_path = os.path.join(output_path, "label.csv")
+    csv_path = os.path.join(sub_path, "label.csv")
     df.to_csv(csv_path, index=False)
 
     bag.close()
