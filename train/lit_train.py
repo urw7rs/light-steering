@@ -4,9 +4,9 @@ import pytorch_lightning as pl
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import TensorBoardLogger
 
-from datamodules import POCDataModule
-from litmodules import LitLightSteer
-from torch_models import Model
+from datamodules import POCDataModule, SeqDataModule
+from litmodules import LitLightSteer, LitSeqLightSteer
+from torch_models import Model, SeqModel
 
 
 def main(args):
@@ -25,16 +25,30 @@ def main(args):
         args, callbacks=[checkpoint_callback], logger=logger
     )
 
-    dm = POCDataModule(
-        data_dir=args.data_dir,
-        img_size=args.img_size,
-        batch_size=args.batch_size,
-        train_f=args.train_f,
-        val_f=args.val_f,
-        test_f=args.test_f,
-    )
+    if args.sequential:
+        dm = SeqDataModule(
+            data_dir=args.data_dir,
+            batch_size=args.batch_size,
+            window=args.window,
+            stride=args.stride,
+        )
 
-    litmodel = LitLightSteer(model=Model(), **dict_args)
+        model = SeqModel()
+
+        litmodel = LitSeqLightSteer(model=model, **dict_args)
+    else:
+        dm = POCDataModule(
+            data_dir=args.data_dir,
+            img_size=args.img_size,
+            batch_size=args.batch_size,
+            train_f=args.train_f,
+            val_f=args.val_f,
+            test_f=args.test_f,
+        )
+
+        model = Model()
+
+        litmodel = LitLightSteer(model=model, **dict_args)
 
     trainer.fit(litmodel, dm)
 
@@ -67,6 +81,26 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--name", type=str, default="default", help="tensorboard logger name"
+    )
+
+    parser.add_argument(
+        "--sequential",
+        default=False,
+        action="store_true",
+        help="sequential flag",
+    )
+
+    parser.add_argument(
+        "--window",
+        type=int,
+        default=25,
+        help="sequence length",
+    )
+    parser.add_argument(
+        "--stride",
+        type=int,
+        default=10,
+        help="sequence stride",
     )
 
     parser.add_argument(

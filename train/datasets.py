@@ -14,45 +14,45 @@ label_file = "label.csv"
 
 
 class CustomDataset(Dataset):
-    def __init__(self, root, split, transform=None, target_transform=None):
-        self.path_col = "path"
-        self.label_cols = ["vel", "ang"]
-
+    def __init__(self, root, transform=None, target_transform=None):
         self.root = root
         self.transform = transform
         self.target_transform = target_transform
 
-        df = pd.read_csv(os.path.join(root, "label.csv"))
+        dfs = []
+        for clip_path in os.listdir(root):
+            full_path = os.path.join(root, clip_path)
+            if os.path.isdir(full_path) and clip_path[0] == ".":
+                continue
 
-        if split != "all":
-            if split == "train":
-                split = 0
-            elif split == "val":
-                split = 1
-            elif split == "test":
-                split = 2
+            df = pd.read_csv(
+                os.path.join(root, clip_path, label_file),
+            )
 
-            df = df.where(df.loc[:, "split"] == split)
-            df = df.dropna()
+            df.iloc[:, 0] = df.iloc[:, 0].apply(
+                lambda p: os.path.join(clip_path, p),
+            )
 
-        self.df = df.drop(["split"], axis=1)
+            df = df.where(df.iloc[:, 1] > 0.0).dropna()
+            dfs.append(df)
+
+        self.df = pd.concat(dfs, axis=0)
 
     def __getitem__(self, idx):
         image = Image.open(
             os.path.join(
                 self.root,
-                self.df.loc[self.df.index[idx], self.path_col],
+                self.df.iloc[idx, 0],
             )
         )
-        vel_ang = self.df.loc[self.df.index[idx], self.label_cols].values
-        vel_ang = vel_ang.astype(np.float32)
+        label = self.df.iloc[idx, 1:].values.astype(np.float32)
 
         if self.transform is not None:
             image = self.transform(image)
         if self.target_transform is not None:
-            vel_ang = self.target_transform(vel_ang)
+            label = self.target_transform(label)
 
-        return image, vel_ang
+        return image, label
 
     def __len__(self):
         return len(self.df)
@@ -77,27 +77,31 @@ class SequentialDataset(Dataset):
         base = 0
         for clip_path in os.listdir(root):
             full_path = os.path.join(root, clip_path)
-            if os.path.isdir(full_path) and clip_path[0] != ".":
-                df = pd.read_csv(
-                    os.path.join(root, clip_path, label_file),
-                )
+            if os.path.isdir(full_path) and clip_path[0] == ".":
+                continue
 
-                df.iloc[:, 0] = df.iloc[:, 0].apply(
-                    lambda p: os.path.join(clip_path, p)
-                )
-                dfs.append(df)
+            df = pd.read_csv(
+                os.path.join(root, clip_path, label_file),
+            )
 
-                # split clip
-                T = len(df)
-                for o in range(0, (T % window), stride):
-                    start = np.arange(0, T - window, stride)
-                    end = start + window
+            df = df.where(df.iloc[:, 1] > 0.0).dropna()
 
-                    # add base to convert start & end indices
-                    indices.append(np.vstack((start, end)) + o + base)
+            df.iloc[:, 0] = df.iloc[:, 0].apply(
+                lambda p: os.path.join(clip_path, p),
+            )
+            dfs.append(df)
 
-                # update base T - 1 + 1 is the next start
-                base += T
+            # split clip
+            T = len(df)
+            for o in range(0, (T - window) % stride + 1, stride):
+                start = np.arange(o, o + T - window + 1, stride)
+                end = start + window
+
+                # add base to convert start & end indices
+                indices.append(np.vstack((start, end)) + base)
+
+            # update base; T - 1 + 1 is the next start
+            base += T
 
         self.indices = np.concatenate(indices, axis=1)
         self.df = pd.concat(dfs, axis=0)
@@ -134,6 +138,8 @@ class SequentialDataset(Dataset):
 
 
 def cache_dataset(dataset, f):
+    return dataset
+
     if os.path.isfile(f):
         data, label = torch.load(f)
     else:

@@ -1,17 +1,25 @@
 import argparse
 
 import torch
-from litmodules import LitLightSteer
-from torch_models import Model
+from litmodules import LitSeqLightSteer
+from torch_models import SeqModel
 
 
 def main(args):
-    input_sample = torch.randn(1, 3, *args.img_size)
+    input = torch.randn(1, 1, 3, *args.img_size)
+    h0 = torch.randn(1, 1, 3)
+    c0 = torch.randn(1, 1, 256)
 
-    model = LitLightSteer.load_from_checkpoint(
-        checkpoint_path=args.ckpt_path, model=Model()
+    litmodel = LitSeqLightSteer.load_from_checkpoint(
+        checkpoint_path=args.ckpt_path, model=SeqModel()
     )
-    model.to_onnx(args.onnx_path, input_sample, export_params=True)
+
+    litmodel.to_onnx(
+        args.onnx_path,
+        input,
+        export_params=True,
+        operator_export_type=torch.onnx.OperatorExportTypes.ONNX_ATEN_FALLBACK
+    )
 
 
 if __name__ == "__main__":
@@ -33,7 +41,7 @@ if __name__ == "__main__":
         "--img_size",
         type=int,
         nargs=2,
-        default=[64, 48],
+        default=[48, 64],
         help="input image size, .pt files need to be deleted",
     )
 

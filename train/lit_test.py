@@ -1,8 +1,8 @@
 import pytorch_lightning as pl
 
-from litmodules import LitLightSteer
-from datamodules import POCDataModule
-from torch_models import Model
+from litmodules import LitLightSteer, LitSeqLightSteer
+from datamodules import POCDataModule, SeqDataModule
+from torch_models import Model, SeqModel
 
 import argparse
 
@@ -11,14 +11,26 @@ def main(args):
     dict_args = vars(args)
     pl.seed_everything(42)
 
-    dm = POCDataModule(**dict_args)
-
     trainer = pl.Trainer.from_argparse_args(args)
-    model = LitLightSteer.load_from_checkpoint(
-        checkpoint_path=args.ckpt_path, model=Model()
-    )
 
-    trainer.test(model, dm)
+    if args.sequential:
+        dm = SeqDataModule(**dict_args)
+
+        model = SeqModel()
+
+        litmodel = LitSeqLightSteer.load_from_checkpoint(
+            checkpoint_path=args.ckpt_path, model=model
+        )
+    else:
+        dm = POCDataModule(**dict_args)
+
+        model = Model()
+
+        litmodel = LitLightSteer.load_from_checkpoint(
+            checkpoint_path=args.ckpt_path, model=model
+        )
+
+    trainer.test(litmodel, dm)
 
 
 if __name__ == "__main__":
@@ -44,6 +56,25 @@ if __name__ == "__main__":
         nargs=2,
         default=[64, 48],
         help="input image size, .pt files need to be deleted",
+    )
+
+    parser.add_argument(
+        "--window",
+        type=int,
+        default=25,
+        help="sequence length",
+    )
+    parser.add_argument(
+        "--stride",
+        type=int,
+        default=10,
+        help="sequence stride",
+    )
+    parser.add_argument(
+        "--sequential",
+        default=False,
+        action="store_true",
+        help="sequential flag",
     )
 
     parser = pl.Trainer.add_argparse_args(parser)
