@@ -58,9 +58,10 @@ def parse_bag(bag_path):
             save_path = os.path.join(sub_path, path)
             if os.path.isfile(save_path):
                 print(f"skipping {save_path} already written")
-            else:
-                cv2.resize(cv_img, tuple(img_size))
-                cv2.imwrite(save_path, cv_img)
+                continue
+
+            cv_img = cv2.resize(cv_img, tuple(img_size))
+            cv2.imwrite(save_path, cv_img)
 
             path_list.append(path)
 
@@ -85,11 +86,19 @@ def parse_bag(bag_path):
         copied += 1
 
     label = np.array(label_list)
+
+    delta = label.copy()
+    delta[1:] -= label[:-1]
+    delta[0] = 0.0
+
     path = np.array(path_list).reshape(-1, 1)
 
-    data = np.concatenate((path, label), axis=1)
+    data = np.concatenate((path, label, delta), axis=1)
 
-    df = pd.DataFrame(data, columns=["path", "vel", "ang"])
+    df = pd.DataFrame(
+        data,
+        columns=["path", "vel", "ang", "vel_delta", "ang_delta"],
+    )
 
     csv_path = os.path.join(sub_path, "label.csv")
     df.to_csv(csv_path, index=False)
@@ -113,8 +122,8 @@ parser.add_argument(
     "--img_size",
     type=int,
     nargs=2,
-    default=[48, 64],
-    help="directory to save images and labels",
+    default=[64, 48],
+    help="image width and height",
 )
 
 args = parser.parse_args()
